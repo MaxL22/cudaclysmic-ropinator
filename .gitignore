@@ -53,3 +53,10 @@ dkms.conf
 
 # debug information files
 *.dwo
+
+# Folders
+./bin
+./obj
+./tests/test_binary
+./tests/test_binary_static
+./tests/test_binary_debug
