@@ -55,8 +55,8 @@ dkms.conf
 *.dwo
 
 # Folders
-./bin
-./obj
+bin
+obj
 ./tests/test_binary
 ./tests/test_binary_static
 ./tests/test_binary_debug
