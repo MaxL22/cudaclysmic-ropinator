@@ -37,7 +37,7 @@ void print_usage(const char *program_name) {
   printf("Usage: %s [OPTIONS] <binary_file>\n", program_name);
   printf("\nDescription: A CUDA-accelerated tool to turn binaries "
          "into open books and give your CPU an existential crysis, ending "
-         "gadgets once and for all (preferably with a jmp).\n");
+         "gadgets once and for all (preferably with a ret).\n");
   printf("\nOptions:\n");
   printf("  -h, --help              Show this help message\n");
   printf("  -v, --verbose           Enable verbose output\n");

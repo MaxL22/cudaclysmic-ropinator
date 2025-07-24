@@ -1,10 +1,10 @@
-/* src/main.c - Main program entry point */
 #include "../include/arg_parser.h"
 #include "../include/binary_parser.h"
 #include "../include/common.h" // This includes
-// #include "../include/gadget_finder.h"
+#include "../include/gadget_finder.h"
 #include <stdio.h>
-// Checks if CUDA is available
+
+// Check if compiled with nvcc
 #ifdef __CUDACC__
 #include <cuda_runtime.h>
 #define CUDA_COMPILED 1
@@ -21,24 +21,25 @@ int main(int argc, char *argv[]) {
   // Gadgets found
   gadget_collection_t gadgets;
   // Search parameters,
-  // search_config_t search_config;
+  search_config_t search_config;
   // Ret value
   result_t result;
 
   // Parse command line arguments, populates the config
   result = parse_arguments(argc, argv, &config);
   if (result != RESULT_SUCCESS) {
-    return RESULT_ERROR_GENERIC;
+    fprintf(stderr, "Failed to parse arguments\n");
+    return 1;
   }
-  if (config.verbose) {
+  if (config.verbose)
     print_config(&config);
-  }
+
   // Parse binary
   result = parse_binary(config.input_file, &binary_info);
   if (result != RESULT_SUCCESS) {
     fprintf(stderr, "Failed to parse binary file\n");
     cleanup_config(&config);
-    return 1;
+    return 2;
   }
   // Override architecture, if forced
   if (config.arch != ARCH_UNKNOWN && config.arch != binary_info.arch) {
@@ -54,30 +55,35 @@ int main(int argc, char *argv[]) {
     printf("\n");
   }
 
-  /*
   // Initialize gadget collection
   result = init_gadget_collection(&gadgets);
   if (result != RESULT_SUCCESS) {
     fprintf(stderr, "Failed to initialize gadget collection\n");
     cleanup_binary_info(&binary_info);
     cleanup_config(&config);
-    return 1;
+    return 3;
   }
 
-  // Setup search configuration
-  search_config.max_gadget_length = config.max_gadget_length;
-  search_config.find_rop_gadgets = true;
-  search_config.find_syscall_gadgets = true;
-  search_config.target_arch = binary_info.arch;
+  // Setup search configuration, *kinda* useless, but can be used to expand in
+  // the future
+  result = setup_search_configuration(&search_config, &config, &binary_info);
+  if (result != RESULT_SUCCESS) {
+    fprintf(stderr, "Failed to initialize search configuration \n");
+    cleanup_gadget_collection(&gadgets);
+    cleanup_binary_info(&binary_info);
+    cleanup_config(&config);
+    return 4;
+  }
 
   // Find gadgets
   if (config.verbose) {
-    printf("Searching for gadgets...\n");
+    printf("Starting search...\n");
   }
 
   if (config.use_cuda) {
-#ifdef CUDA_ENABLED
-    result = find_gadgets_cuda(&binary_info, &search_config, &gadgets);
+#ifdef CUDA_COMPILED
+    // result = find_gadgets_cuda(&binary_info, &search_config, &gadgets);
+    result = find_gadgets(&binary_info, &search_config, &gadgets);
 #else
     fprintf(stderr,
             "Warning: CUDA support not compiled in, using CPU version\n");
@@ -88,18 +94,21 @@ int main(int argc, char *argv[]) {
   }
 
   if (result != RESULT_SUCCESS) {
-    fprintf(stderr, "Failed to find gadgets\n");
+    fprintf(stderr, "Failed gadget-finding phase\n");
     cleanup_gadget_collection(&gadgets);
     cleanup_binary_info(&binary_info);
     cleanup_config(&config);
-    return 1;
+    return 5;
   }
 
   // Sort gadgets by address
   if (config.verbose) {
     printf("Sorting gadgets...\n");
   }
-  sort_gadgets(&gadgets);
+  result = sort_gadgets(&gadgets);
+  if (result != RESULT_SUCCESS) {
+    return 6; // Should never happen
+  }
 
   // Output results
   if (config.verbose) {
@@ -111,7 +120,7 @@ int main(int argc, char *argv[]) {
   if (config.output_file) {
     output = fopen(config.output_file, "w");
     if (!output) {
-      fprintf(stderr, "Error: Cannot open output file %s\n",
+      fprintf(stderr, "Error: Cannot open output file %s, using stdout\n",
               config.output_file);
       output = stdout;
     }
@@ -132,10 +141,9 @@ int main(int argc, char *argv[]) {
   printf("  Total gadgets found: %zu\n", gadgets.count);
   printf("  Binary format: %s\n", format_to_string(binary_info.format));
   printf("  Architecture: %s\n", arch_to_string(binary_info.arch));
-  */
 
   // Cleanup
-  // cleanup_gadget_collection(&gadgets);
+  cleanup_gadget_collection(&gadgets);
   cleanup_binary_info(&binary_info);
   cleanup_config(&config);
 

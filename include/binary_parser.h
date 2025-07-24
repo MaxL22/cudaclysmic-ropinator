@@ -20,6 +20,7 @@ result_t parse_elf(binary_info_t *info);
 result_t parse_elf_sections(binary_info_t *info);
 result_t load_section_data(binary_info_t *info);
 void cleanup_binary_info(binary_info_t *info);
+result_t detect_architecture(binary_info_t *info);
 
 /* ELF parsing helpers */
 result_t parse_elf32(binary_info_t *info);

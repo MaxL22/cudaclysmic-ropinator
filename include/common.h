@@ -46,6 +46,19 @@ typedef enum {
   GADGET_SYSCALL  // syscall; ret
 } gadget_type_t;
 
+
+/* Function result codes */
+typedef enum {
+  RESULT_SUCCESS = 0,
+  RESULT_ERROR_GENERIC,
+  RESULT_ERROR_PARAM,
+  RESULT_ERROR_FILE,
+  RESULT_ERROR_FORMAT,
+  RESULT_ERROR_MEMORY,
+  RESULT_ERROR_ARCH,
+  RESULT_ERROR_CUDA
+} result_t;
+
 /* Gadget structure */
 typedef struct {
   uint64_t address;    // Virtual address of gadget
@@ -97,22 +110,18 @@ typedef struct {
   architecture_t arch; // Force architecture
 } config_t;
 
-/* Function result codes */
-typedef enum {
-  RESULT_SUCCESS = 0,
-  RESULT_ERROR_GENERIC,
-  RESULT_ERROR_PARAM,
-  RESULT_ERROR_FILE,
-  RESULT_ERROR_FORMAT,
-  RESULT_ERROR_MEMORY,
-  RESULT_ERROR_ARCH,
-  RESULT_ERROR_CUDA
-} result_t;
+/* Gadget search configuration */
+typedef struct {
+  int max_gadget_length;      // Maximum instruction length
+  bool find_rop_gadgets;      // Find ROP gadgets
+  bool find_syscall_gadgets;  // Find syscall gadgets
+  architecture_t target_arch; // Target architecture
+} search_config_t;
 
 /* Utility macros */
-#define MAX_GADGET_LENGTH 20
+#define MAX_GADGET_LENGTH 32
 #define MAX_SECTIONS 64
-#define GADGET_INITIAL_CAPACITY 1000
+#define GADGET_INITIAL_CAPACITY 512
 
 /* Memory management helpers */
 #define SAFE_FREE(ptr)                                                         \

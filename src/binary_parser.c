@@ -1,6 +1,7 @@
 #include "../include/arg_parser.h"
 #include "../include/binary_parser.h"
 #include <errno.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -76,6 +77,13 @@ result_t parse_binary(const char *filename, binary_info_t *info) {
   }
   if (result != RESULT_SUCCESS) {
     cleanup_binary_info(info);
+  }
+
+  // Detect architecture
+  result = detect_architecture(info);
+  if (result != RESULT_SUCCESS) {
+    cleanup_binary_info(info);
+    return result;
   }
 
   return result;
@@ -461,4 +469,42 @@ void print_binary_info(const binary_info_t *info) {
              section->executable ? "X" : "-", section->readable ? "R" : "-");
     }
   }
+}
+
+/* Detect architecture from ELF */
+result_t detect_architecture(binary_info_t *info) {
+  unsigned char e_ident[EI_NIDENT];
+  uint16_t e_machine;
+
+  fseek(info->file, 0, SEEK_SET);
+  if (fread(e_ident, EI_NIDENT, 1, info->file) != 1) {
+    return RESULT_ERROR_FILE;
+  }
+
+  // Read machine type
+  fseek(info->file, offsetof(Elf64_Ehdr, e_machine), SEEK_SET);
+  if (fread(&e_machine, sizeof(e_machine), 1, info->file) != 1) {
+    return RESULT_ERROR_FILE;
+  }
+
+  // Determine architecture
+  switch (e_machine) {
+  case EM_386:
+    info->arch = ARCH_X86;
+    break;
+  case EM_X86_64:
+    info->arch = ARCH_X86_64;
+    break;
+  case EM_ARM:
+    info->arch = ARCH_ARM;
+    break;
+  case EM_AARCH64:
+    info->arch = ARCH_ARM64;
+    break;
+  default:
+    info->arch = ARCH_UNKNOWN;
+    return RESULT_ERROR_ARCH;
+  }
+
+  return RESULT_SUCCESS;
 }
