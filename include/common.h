@@ -119,7 +119,7 @@ typedef struct {
 } search_config_t;
 
 /* Utility macros */
-#define MAX_GADGET_LENGTH 32
+#define MAX_GADGET_LENGTH 16
 #define MAX_SECTIONS 64
 #define GADGET_INITIAL_CAPACITY 512
 

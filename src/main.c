@@ -82,8 +82,8 @@ int main(int argc, char *argv[]) {
 
   if (config.use_cuda) {
 #ifdef CUDA_COMPILED
+    printf("CUDA Search, of course\n");
     // result = find_gadgets_cuda(&binary_info, &search_config, &gadgets);
-    result = find_gadgets(&binary_info, &search_config, &gadgets);
 #else
     fprintf(stderr,
             "Warning: CUDA support not compiled in, using CPU version\n");

@@ -2,6 +2,7 @@
 #include "../include/gadget_finder.h"
 #include <capstone/capstone.h> // Disassembly engine
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 // Glbal handles for disassembly
@@ -18,9 +19,7 @@ static bool cs_initialized = false;
 result_t find_gadgets(const binary_info_t *binary,
                       const search_config_t *config,
                       gadget_collection_t *collection) {
-
   result_t result;
-
   // Check arch, if it's not supported we're getting it out of the way early
   switch (binary->arch) {
   case ARCH_X86:
@@ -33,7 +32,6 @@ result_t find_gadgets(const binary_info_t *binary,
     fprintf(stderr, "Error: architecture not yet supported\n");
     return RESULT_ERROR_ARCH;
   }
-
   // For each section call the correct function
   for (size_t i = 0; i < binary->section_count; i++) {
     binary_section_t *sec = binary->sections + i;
@@ -75,24 +73,7 @@ result_t init_gadget_collection(gadget_collection_t *collection) {
   return RESULT_SUCCESS;
 }
 
-result_t cleanup_gadget_collection(gadget_collection_t *collection) {
-  if (!collection)
-    return RESULT_ERROR_PARAM;
-
-  for (size_t i = 0; i < collection->count; i++) {
-    SAFE_FREE(collection->gadgets[i].bytes);
-    SAFE_FREE(collection->gadgets[i].disasm);
-  }
-
-  SAFE_FREE(collection->gadgets);
-
-  collection->count = 0;
-  collection->capacity = 0;
-
-  return RESULT_SUCCESS;
-}
-
-// Adds gadget to collection, CONSUMES THE GADGET
+// Adds gadget to collection
 result_t add_gadget(gadget_collection_t *collection, gadget_t *gadget) {
   if (!collection || !gadget) {
     return RESULT_ERROR_PARAM;
@@ -144,16 +125,38 @@ result_t add_gadget(gadget_collection_t *collection, gadget_t *gadget) {
 
   collection->count++;
 
-  // Free the gadget
-  free_gadget(gadget);
-
   return RESULT_SUCCESS;
 }
 
 void free_gadget(gadget_t *gadget) {
-  SAFE_FREE(gadget->bytes);
-  SAFE_FREE(gadget->disasm);
+  if (!gadget)
+    return;
+
+  if (gadget->bytes)
+    SAFE_FREE(gadget->bytes);
+  if (gadget->disasm)
+    SAFE_FREE(gadget->disasm);
+
   SAFE_FREE(gadget);
+}
+
+void cleanup_gadget_collection(gadget_collection_t *coll) {
+  if (!coll)
+    return;
+
+  for (size_t i = 0; i < coll->count; i++) {
+    gadget_t *g = coll->gadgets + i;
+    if (g->bytes)
+      SAFE_FREE(g->bytes);
+    if (g->disasm)
+      SAFE_FREE(g->disasm);
+  }
+
+  SAFE_FREE(coll->gadgets);
+  coll->count = 0;
+  coll->capacity = 0;
+
+  SAFE_FREE(coll);
 }
 
 result_t setup_search_configuration(search_config_t *config,
@@ -215,6 +218,7 @@ char *create_disassembly(const uint8_t *bytes, size_t length,
                          uint64_t address) {
   if (!bytes || length == 0)
     return NULL;
+
   // Initialize Capstone if not already done
   if (init_capstone() != RESULT_SUCCESS) {
     return NULL;
@@ -226,18 +230,20 @@ char *create_disassembly(const uint8_t *bytes, size_t length,
   // If it fails
   if (count == 0) {
     // Fallback to hex if disassembly fails
-    size_t hex_len = length * 3 + 20; // Extra space for "db " prefixes
+    size_t hex_len = length * 10 + 1; // Extra space for "db " prefixes
     char *disasm = malloc(hex_len);
     if (!disasm)
       return NULL;
 
     char *ptr = disasm;
-    for (size_t i = 0; i < length; i++) {
-      if (i > 0) {
-        ptr += sprintf(ptr, "; ");
-      }
-      ptr += sprintf(ptr, "db 0x%02x", bytes[i]);
+    int written = sprintf(ptr, "db 0x%02x", bytes[0]);
+    ptr += written;
+    for (size_t i = 1; i < length; i++) {
+      written = sprintf(ptr, "; db 0x%02x", bytes[i]);
+      ptr += written;
     }
+    *ptr = '\0';
+
     return disasm;
   }
 
@@ -247,7 +253,8 @@ char *create_disassembly(const uint8_t *bytes, size_t length,
     total_len += strlen(insn[i].mnemonic) + strlen(insn[i].op_str) +
                  4; // mnemonic + " " + op_str + "; "
   }
-  total_len += 1; // null terminator
+  total_len += 1;  // null terminator
+  total_len += 64; // To be safe
 
   char *disasm = malloc(total_len);
   if (!disasm) {
@@ -256,18 +263,40 @@ char *create_disassembly(const uint8_t *bytes, size_t length,
   }
 
   char *ptr = disasm;
+  size_t remaining = total_len;
+
   for (size_t i = 0; i < count; i++) {
-    if (i > 0) {
-      ptr += sprintf(ptr, "; ");
+    int written = 0;
+
+    if (i > 0 && remaining > 2) {
+      written = snprintf(ptr, remaining, "; ");
+      if (written > 0 && written < (int)remaining) {
+        ptr += written;
+        remaining -= written;
+      }
     }
 
     if (strlen(insn[i].op_str) > 0) {
-      ptr += sprintf(ptr, "%s %s", insn[i].mnemonic, insn[i].op_str);
+      written =
+          snprintf(ptr, remaining, "%s %s", insn[i].mnemonic, insn[i].op_str);
     } else {
-      ptr += sprintf(ptr, "%s", insn[i].mnemonic);
+      written = snprintf(ptr, remaining, "%s", insn[i].mnemonic);
+    }
+
+    if (written > 0 && written < (int)remaining) {
+      ptr += written;
+      remaining -= written;
+    } else {
+      // Buffer overflow protection - truncate
+      break;
     }
   }
-  *ptr = '\0';
+  // Ensure null termination, could be done better
+  if (remaining > 0) {
+    *ptr = '\0';
+  } else {
+    disasm[total_len - 1] = '\0';
+  }
 
   cs_free(insn, count);
   return disasm;
@@ -397,8 +426,10 @@ result_t find_in_section_x86_64(const binary_section_t *section,
   if (!section->data || section->size == 0) {
     return RESULT_SUCCESS; // Nothing to search, I guess it's a win
   }
+
   // Initialize Capstone
   if (init_capstone() != RESULT_SUCCESS) {
+    fprintf(stderr, "Error while initializing capstone library\n");
     return RESULT_ERROR_GENERIC;
   }
   result_t result = RESULT_SUCCESS;
@@ -429,12 +460,11 @@ result_t find_in_section_x86_64(const binary_section_t *section,
       result = analyze_sequence(section->data + start_pos, gadget_len,
                                 gadget_addr, config->target_arch, temp_gadget);
 
-      if (result != RESULT_SUCCESS) {
+      if (result != RESULT_SUCCESS)
         continue; // Skip this sequence
-      }
-      if (temp_gadget->type == GADGET_UNKNOWN) {
+
+      if (temp_gadget->type == GADGET_UNKNOWN)
         continue;
-      }
 
       // Check if this is a valid gadget based on configuration
       bool should_add = false;
@@ -466,6 +496,8 @@ result_t find_in_section_x86_64(const binary_section_t *section,
       if (result != RESULT_SUCCESS) {
         return result;
       }
+
+      free_gadget(temp_gadget);
     }
   }
 

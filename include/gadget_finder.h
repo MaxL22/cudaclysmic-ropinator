@@ -20,7 +20,7 @@ result_t analyze_sequence(const uint8_t *data, size_t length,
 /* Gadget collection management */
 result_t init_gadget_collection(gadget_collection_t *collection);
 result_t add_gadget(gadget_collection_t *collection, gadget_t *gadget);
-result_t cleanup_gadget_collection(gadget_collection_t *collection);
+void cleanup_gadget_collection(gadget_collection_t *collection);
 result_t sort_gadgets(gadget_collection_t *collection);
 result_t filter_gadgets(gadget_collection_t *collection, gadget_type_t type);
 void free_gadget(gadget_t *gadget);
