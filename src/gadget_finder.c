@@ -328,6 +328,9 @@ gadget_type_t classify_x86_64_gadget(gadget_t *gadget) {
     return GADGET_UNKNOWN;
   }
 
+  if (strncmp(insn[count - 1].mnemonic, "ret", 3) != 0)
+    return GADGET_UNKNOWN;
+
   gadget_type_t type = GADGET_UNKNOWN;
 
   // Analyze instructions (excluding the final ret)
