@@ -156,7 +156,7 @@ void cleanup_gadget_collection(gadget_collection_t *coll) {
   coll->count = 0;
   coll->capacity = 0;
 
-  SAFE_FREE(coll);
+  // SAFE_FREE(coll);
 }
 
 result_t setup_search_configuration(search_config_t *config,
@@ -460,11 +460,10 @@ result_t find_in_section_x86_64(const binary_section_t *section,
       result = analyze_sequence(section->data + start_pos, gadget_len,
                                 gadget_addr, config->target_arch, temp_gadget);
 
-      if (result != RESULT_SUCCESS)
-        continue; // Skip this sequence
-
-      if (temp_gadget->type == GADGET_UNKNOWN)
+      if (result != RESULT_SUCCESS || temp_gadget->type == GADGET_UNKNOWN) {
+        free_gadget(temp_gadget);
         continue;
+      }
 
       // Check if this is a valid gadget based on configuration
       bool should_add = false;
@@ -493,11 +492,10 @@ result_t find_in_section_x86_64(const binary_section_t *section,
       }
 
       result = add_gadget(collection, temp_gadget);
+      free_gadget(temp_gadget);
       if (result != RESULT_SUCCESS) {
         return result;
       }
-
-      free_gadget(temp_gadget);
     }
   }
 
